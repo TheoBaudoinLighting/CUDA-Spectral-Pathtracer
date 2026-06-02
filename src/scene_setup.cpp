@@ -1,6 +1,35 @@
 #include "scene_setup.h"
 #include "cuda_utils.cuh"
 #include <cmath>
+#include <cstdlib>
+
+namespace {
+
+MaterialData make_default_material(MaterialType type) {
+    MaterialData material = {};
+    material.type = type;
+    material.albedo = Color(1.0f, 1.0f, 1.0f);
+    material.fuzz = 0.0f;
+    material.ior = 1.0f;
+    material.dispersive = false;
+    material.emission = Color(0.0f, 0.0f, 0.0f);
+    material.spectral_function_id = SPECTRAL_PROFILE_RGB_RECONSTRUCTION;
+    material.emission_spectrum_id = SPECTRAL_PROFILE_D65_WHITE;
+    material.dispersion_A = 1.0f;
+    material.dispersion_B = 0.0f;
+    material.dispersion_C = 0.0f;
+    material.absorption_density = 0.0f;
+    material.absorption_color = Color(1.0f, 1.0f, 1.0f);
+    material.absorption_spectrum_id = SPECTRAL_PROFILE_CONSTANT;
+    return material;
+}
+
+bool nearly_neutral(const Color& value) {
+    return std::fabs(value.x - value.y) < 1.0e-4f &&
+           std::fabs(value.x - value.z) < 1.0e-4f;
+}
+
+}
 
 int add_sphere(Scene& scene, const Point3& center, float radius, int material_id) {
     int index = static_cast<int>(scene.spheres.size());
@@ -126,9 +155,9 @@ void add_triangular_prism(Scene& scene, const Point3& base_center, float base_si
         top_vertices[i] = Point3(base_vertices[i].x, base_vertices[i].y + height, base_vertices[i].z);
     }
     
-    add_triangle(scene, base_vertices[0], base_vertices[1], base_vertices[2], material_id);
+    add_triangle(scene, base_vertices[0], base_vertices[2], base_vertices[1], material_id);
     
-    add_triangle(scene, top_vertices[0], top_vertices[2], top_vertices[1], material_id);
+    add_triangle(scene, top_vertices[0], top_vertices[1], top_vertices[2], material_id);
     
     for (int i = 0; i < 3; i++) {
         int j = (i + 1) % 3;
@@ -155,38 +184,64 @@ int add_material(Scene& scene, const MaterialData& material) {
 }
 
 int add_lambertian_material(Scene& scene, const Color& albedo) {
-    MaterialData material;
-    material.type = LAMBERTIAN;
+    MaterialData material = make_default_material(LAMBERTIAN);
     material.albedo = albedo;
     return add_material(scene, material);
 }
 
 int add_metal_material(Scene& scene, const Color& albedo, float fuzz) {
-    MaterialData material;
-    material.type = METAL;
+    MaterialData material = make_default_material(METAL);
     material.albedo = albedo;
-    material.fuzz = fuzz;
+    material.fuzz = std::fmin(std::fmax(fuzz, 0.0f), 1.0f);
     return add_material(scene, material);
 }
 
 int add_dielectric_material(Scene& scene, float ior, bool dispersive) {
-    MaterialData material;
-    material.type = DIELECTRIC;
+    MaterialData material = make_default_material(DIELECTRIC);
     material.ior = ior;
     material.dispersive = dispersive;
+    material.dispersion_A = ior;
+    material.dispersion_B = 0.0f;
+    material.dispersion_C = 0.0f;
+    if (dispersive) {
+        material.dispersion_A = 1.5837f;
+        material.dispersion_B = 10800.0f;
+        material.dispersion_C = 0.0f;
+    }
+    return add_material(scene, material);
+}
+
+int add_cauchy_dielectric_material(Scene& scene, float A, float B, float C, float absorption_density) {
+    MaterialData material = make_default_material(DIELECTRIC);
+    material.ior = A;
+    material.dispersive = true;
+    material.dispersion_A = A;
+    material.dispersion_B = B;
+    material.dispersion_C = C;
+    material.absorption_density = absorption_density;
+    material.absorption_color = Color(1.0f, 1.0f, 1.0f);
+    material.absorption_spectrum_id = SPECTRAL_PROFILE_CONSTANT;
     return add_material(scene, material);
 }
 
 int add_emissive_material(Scene& scene, const Color& emission) {
-    MaterialData material;
-    material.type = EMISSIVE;
+    MaterialData material = make_default_material(EMISSIVE);
     material.emission = emission;
+    material.emission_spectrum_id = nearly_neutral(emission)
+        ? SPECTRAL_PROFILE_D65_WHITE
+        : SPECTRAL_PROFILE_RGB_RECONSTRUCTION;
+    return add_material(scene, material);
+}
+
+int add_emissive_spectral_material(Scene& scene, float strength, int spectral_function_id) {
+    MaterialData material = make_default_material(EMISSIVE);
+    material.emission = Color(strength, strength, strength);
+    material.emission_spectrum_id = spectral_function_id;
     return add_material(scene, material);
 }
 
 int add_spectral_material(Scene& scene, const Color& albedo, int spectral_function_id) {
-    MaterialData material;
-    material.type = SPECTRAL;
+    MaterialData material = make_default_material(SPECTRAL);
     material.albedo = albedo;
     material.spectral_function_id = spectral_function_id;
     return add_material(scene, material);
@@ -205,12 +260,12 @@ Scene create_prism_showcase_scene(const ImageProperties& img_props) {
     Scene scene(cam, img_props);
     
     int ground_material = add_lambertian_material(scene, Color(0.2f, 0.3f, 0.1f));
-    int prism_material = add_dielectric_material(scene, 1.5f, true);
+    int prism_material = add_cauchy_dielectric_material(scene, 1.5837f, 10800.0f, 0.0f, 0.0f);
     int light_material = add_emissive_material(scene, Color(15, 15, 15));
     int metal_material = add_metal_material(scene, Color(0.8f, 0.8f, 0.8f), 0.05f);
     int glass_material = add_dielectric_material(scene, 1.5f, false);
     int diffuse_material = add_lambertian_material(scene, Color(0.4f, 0.2f, 0.1f));
-    int spectral_material = add_spectral_material(scene, Color(0.8f, 0.8f, 0.8f), 0);
+    int spectral_material = add_spectral_material(scene, Color(0.8f, 0.8f, 0.8f), SPECTRAL_PROFILE_GREEN_FILTER);
     
     add_rectangle_xz(scene, -1000, 1000, -1000, 1000, -1, ground_material);
     
@@ -272,7 +327,11 @@ Scene create_material_showcase_scene(const ImageProperties& img_props) {
                     float fuzz = 0.5f * static_cast<float>(rand()) / RAND_MAX;
                     sphere_material = add_metal_material(scene, albedo, fuzz);
                 } else {
-                    sphere_material = add_dielectric_material(scene, 1.5f, choose_mat > 0.98f);
+                    if (choose_mat > 0.98f) {
+                        sphere_material = add_cauchy_dielectric_material(scene, 1.5837f, 10800.0f, 0.0f, 0.0f);
+                    } else {
+                        sphere_material = add_dielectric_material(scene, 1.5f, false);
+                    }
                 }
                 
                 add_sphere(scene, center, 0.2f, sphere_material);
@@ -280,7 +339,7 @@ Scene create_material_showcase_scene(const ImageProperties& img_props) {
         }
     }
     
-    int material1 = add_dielectric_material(scene, 1.5f, true);
+    int material1 = add_cauchy_dielectric_material(scene, 1.5837f, 10800.0f, 0.0f, 0.0f);
     add_sphere(scene, Point3(0, 1, 0), 1.0f, material1);
     
     int material2 = add_lambertian_material(scene, Color(0.4f, 0.2f, 0.1f));
@@ -304,10 +363,10 @@ Scene create_cornell_box_scene(const ImageProperties& img_props) {
     
     Scene scene(cam, img_props);
     
-    int red = add_lambertian_material(scene, Color(0.65f, 0.05f, 0.05f));
-    int white = add_lambertian_material(scene, Color(0.73f, 0.73f, 0.73f));
-    int green = add_lambertian_material(scene, Color(0.12f, 0.45f, 0.15f));
-    int light = add_emissive_material(scene, Color(15.0f, 15.0f, 15.0f));
+    int red = add_spectral_material(scene, Color(1.0f, 1.0f, 1.0f), SPECTRAL_PROFILE_CORNELL_RED);
+    int white = add_spectral_material(scene, Color(1.0f, 1.0f, 1.0f), SPECTRAL_PROFILE_CORNELL_WHITE);
+    int green = add_spectral_material(scene, Color(1.0f, 1.0f, 1.0f), SPECTRAL_PROFILE_CORNELL_GREEN);
+    int light = add_emissive_spectral_material(scene, 1.0f, SPECTRAL_PROFILE_CORNELL_LIGHT);
     
     add_rectangle_yz(scene, 0, 555, 0, 555, 555, green);
     add_rectangle_yz(scene, 0, 555, 0, 555, 0, red);
@@ -317,7 +376,7 @@ Scene create_cornell_box_scene(const ImageProperties& img_props) {
     
     add_rectangle_xz(scene, 213, 343, 227, 332, 554, light);
     
-    int prism_material = add_dielectric_material(scene, 1.5f, true);
+    int prism_material = add_cauchy_dielectric_material(scene, 1.5837f, 10800.0f, 0.0f, 0.0f);
     add_triangular_prism(scene, Point3(278, 165, 278), 80, 165, prism_material);
     
     return scene;

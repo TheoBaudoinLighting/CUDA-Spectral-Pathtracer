@@ -22,6 +22,7 @@ struct HitRecord {
     float u, v;
     bool front_face;
     int material_id;
+    int object_id;
 
     __device__ inline void set_face_normal(const Ray& r, const Vec3& outward_normal) {
         front_face = dot(r.direction, outward_normal) < 0;
@@ -282,6 +283,7 @@ __device__ inline bool hit_objects(
         if (hit_object) {
             hit_anything = true;
             closest_so_far = temp_rec.t;
+            temp_rec.object_id = i;
             rec = temp_rec;
         }
     }

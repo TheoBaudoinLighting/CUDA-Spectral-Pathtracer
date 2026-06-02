@@ -96,6 +96,24 @@ __device__ inline Vec3 random_unit_vector(curandState* state) {
     return normalize(random_in_unit_sphere(state));
 }
 
+__device__ inline Vec3 random_cosine_direction(const Vec3& normal, curandState* state) {
+    float r1 = curand_uniform(state);
+    float r2 = curand_uniform(state);
+    float phi = 2.0f * M_PI * r1;
+    float sqrt_r2 = sqrtf(r2);
+
+    Vec3 w = normalize(normal);
+    Vec3 a = fabsf(w.x) > 0.9f ? Vec3(0.0f, 1.0f, 0.0f) : Vec3(1.0f, 0.0f, 0.0f);
+    Vec3 v = normalize(cross(w, a));
+    Vec3 u = cross(v, w);
+
+    return normalize(
+        cosf(phi) * sqrt_r2 * u +
+        sinf(phi) * sqrt_r2 * v +
+        sqrtf(fmaxf(0.0f, 1.0f - r2)) * w
+    );
+}
+
 __device__ inline Vec3 random_in_unit_disk(curandState* state) {
     while (true) {
         auto p = Vec3(

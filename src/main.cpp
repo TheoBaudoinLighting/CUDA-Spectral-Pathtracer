@@ -2,6 +2,9 @@
 #include <vector>
 #include <string>
 #include <chrono>
+#include <ctime>
+#include <cstdlib>
+#include <algorithm>
 #include <cuda_runtime.h>
 
 #include "vec3.cuh"
@@ -35,7 +38,21 @@ extern "C" void launch_render_kernel(
     curandState* rand_state
 );
 
-int main() {
+namespace {
+
+bool read_int_arg(int argc, char** argv, const std::string& name, int& value) {
+    for (int i = 1; i + 1 < argc; ++i) {
+        if (argv[i] == name) {
+            value = std::atoi(argv[i + 1]);
+            return true;
+        }
+    }
+    return false;
+}
+
+}
+
+int main(int argc, char** argv) {
     ImageProperties img_props;
     img_props.width = 800;
     img_props.height = 800;
@@ -46,6 +63,19 @@ int main() {
     img_props.lambda_min = LAMBDA_MIN;
     img_props.lambda_max = LAMBDA_MAX;
 
+    read_int_arg(argc, argv, "--width", img_props.width);
+    read_int_arg(argc, argv, "--height", img_props.height);
+    read_int_arg(argc, argv, "--spp", img_props.samples_per_pixel);
+    read_int_arg(argc, argv, "--depth", img_props.max_depth);
+    read_int_arg(argc, argv, "--spectral", img_props.spectral_samples);
+
+    img_props.width = std::max(1, img_props.width);
+    img_props.height = std::max(1, img_props.height);
+    img_props.samples_per_pixel = std::max(1, img_props.samples_per_pixel);
+    img_props.max_depth = std::max(1, img_props.max_depth);
+    img_props.spectral_samples = std::max(1, img_props.spectral_samples);
+    img_props.num_pixels = img_props.width * img_props.height;
+
     std::cout << "Render configuration:" << std::endl;
     std::cout << "  Resolution: " << img_props.width << "x" << img_props.height << std::endl;
     std::cout << "  Samples per pixel: " << img_props.samples_per_pixel << std::endl;
@@ -54,12 +84,14 @@ int main() {
     std::cout << "  Spectral range: " << img_props.lambda_min << "-" << img_props.lambda_max << " nm" << std::endl;
 
     int scene_choice = 0;
-    std::cout << "\nChoose a scene:" << std::endl;
-    std::cout << "  1. Prism in Cornell Box" << std::endl;
-    std::cout << "  2. Prism showcase (exterior)" << std::endl;
-    std::cout << "  3. Material showcase" << std::endl;
-    std::cout << "Your choice (1-3): ";
-    std::cin >> scene_choice;
+    if (!read_int_arg(argc, argv, "--scene", scene_choice)) {
+        std::cout << "\nChoose a scene:" << std::endl;
+        std::cout << "  1. Prism in Cornell Box" << std::endl;
+        std::cout << "  2. Prism showcase (exterior)" << std::endl;
+        std::cout << "  3. Material showcase" << std::endl;
+        std::cout << "Your choice (1-3): ";
+        std::cin >> scene_choice;
+    }
 
     Scene scene(Camera(Point3(0, 0, 0), Point3(0, 0, -1), Vec3(0, 1, 0), 40, 1.0, 0.0, 10.0), img_props);
 
@@ -97,7 +129,7 @@ int main() {
     auto start_time = std::chrono::high_resolution_clock::now();
 
     std::cout << "\nInitializing random number generators..." << std::endl;
-    launch_init_rand_states(dev_rand_state, img_props, time(nullptr));
+    launch_init_rand_states(dev_rand_state, img_props, static_cast<unsigned long>(std::time(nullptr)));
 
     std::cout << "Allocating and transferring scene data to GPU..." << std::endl;
     allocate_scene_on_gpu(

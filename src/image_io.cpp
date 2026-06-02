@@ -5,6 +5,28 @@
 #include <iomanip>
 #include <sstream>
 #include <algorithm>
+#include <cmath>
+
+namespace {
+
+float sanitize_channel(float value) {
+    return std::isfinite(value) ? std::max(0.0f, value) : 0.0f;
+}
+
+float reinhard_tonemap(float value) {
+    value = sanitize_channel(value);
+    return value / (1.0f + value);
+}
+
+float linear_to_srgb(float value) {
+    value = reinhard_tonemap(value);
+    if (value <= 0.0031308f) {
+        return 12.92f * value;
+    }
+    return 1.055f * std::pow(value, 1.0f / 2.4f) - 0.055f;
+}
+
+}
 
 void save_image_ppm(
     const std::string& filename,
@@ -28,9 +50,9 @@ void save_image_ppm(
             int pixel_index = j * width + i;
             
             Color pixel = framebuffer[pixel_index] * scale;
-            pixel.x = std::sqrt(pixel.x);
-            pixel.y = std::sqrt(pixel.y);
-            pixel.z = std::sqrt(pixel.z);
+            pixel.x = linear_to_srgb(pixel.x);
+            pixel.y = linear_to_srgb(pixel.y);
+            pixel.z = linear_to_srgb(pixel.z);
             
             int r = static_cast<int>(256 * std::clamp(pixel.x, 0.0f, 0.999f));
             int g = static_cast<int>(256 * std::clamp(pixel.y, 0.0f, 0.999f));
