@@ -20,7 +20,13 @@ A personal, experimental project: A high-performance spectral path tracer implem
   - Prism dispersion demonstration
 - **Image Output**: Supports PPM format with timestamp-based filenames
 
-![image](https://github.com/user-attachments/assets/025ae9ff-da73-406a-9173-f92bbc7f84c7)
+## Latest Renders
+
+The latest spectral update keeps the renderer output in native PPM format:
+
+- [Cornell Box with measured Cornell spectra and dispersive prism](after_cornell_measured_scene1_cornell_prism_20260602_161647.ppm)
+- [Exterior prism showcase](after_cornell_measured_scene2_prism_showcase_20260602_161647.ppm)
+- [Material showcase](after_cornell_measured_scene3_material_showcase_20260602_161647.ppm)
 
 ## Technical Details
 
@@ -38,11 +44,7 @@ Where `n` is the refractive index, `λ` is the wavelength, and `A`, `B`, and `C`
 
 ### Spectral to RGB Conversion
 
-To visualize spectral data on traditional displays, the renderer implements a physically-based conversion from wavelengths to RGB color space, preserving the visual characteristics of dispersion effects.
-
-![image](https://github.com/user-attachments/assets/e795eeec-1017-4ae7-b06c-648a09aa4fde)
-
-![image](https://github.com/user-attachments/assets/79451194-2f7d-4e49-9011-5cc60092a209)
+To visualize spectral data on traditional displays, the renderer integrates sampled wavelengths against tabulated CIE 1931 color matching functions, converts the accumulated XYZ result to linear sRGB, then writes tone-mapped PPM output.
 
 ### CUDA Optimization
 
