@@ -22,11 +22,19 @@ A personal, experimental project: A high-performance spectral path tracer implem
 
 ## Latest Renders
 
-The latest spectral update keeps the renderer output in native PPM format:
+Preview PNGs exported from the latest native PPM render outputs:
 
-- [Cornell Box with measured Cornell spectra and dispersive prism](after_cornell_measured_scene1_cornell_prism_20260602_161647.ppm)
-- [Exterior prism showcase](after_cornell_measured_scene2_prism_showcase_20260602_161647.ppm)
-- [Material showcase](after_cornell_measured_scene3_material_showcase_20260602_161647.ppm)
+### Cornell Box with measured Cornell spectra and dispersive prism
+
+![Cornell Box with measured Cornell spectra and dispersive prism](after_cornell_measured_scene1_cornell_prism_20260602_161647.png)
+
+### Exterior prism showcase
+
+![Exterior prism showcase](after_cornell_measured_scene2_prism_showcase_20260602_161647.png)
+
+### Material showcase
+
+![Material showcase](after_cornell_measured_scene3_material_showcase_20260602_161647.png)
 
 ## Technical Details
 
